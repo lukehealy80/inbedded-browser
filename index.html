@@ -1,0 +1,154 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Mini Browser</title>
+<style>
+  :root {
+    --chrome: #dfe6ee;
+    --bar: #ffffff;
+    --ink: #1d2733;
+    --muted: #5d6b7c;
+    --line: #b9c4d0;
+    --accent: #1a7f86;
+    --page: #f4f7fa;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --chrome: #1f2833;
+      --bar: #2b3644;
+      --ink: #e6ecf2;
+      --muted: #98a6b6;
+      --line: #3e4b5b;
+      --accent: #4fc3c9;
+      --page: #151b22;
+    }
+  }
+  * { box-sizing: border-box; }
+  html, body { height: 100%; margin: 0; }
+  body {
+    display: flex; flex-direction: column;
+    background: var(--page); color: var(--ink);
+    font: 15px/1.4 system-ui, -apple-system, "Segoe UI", sans-serif;
+  }
+  .chrome {
+    display: flex; gap: 6px; align-items: center;
+    padding: 8px 10px; background: var(--chrome);
+    border-bottom: 1px solid var(--line);
+  }
+  button, .btn {
+    min-width: 36px; height: 36px; padding: 0 10px;
+    border: 1px solid var(--line); border-radius: 8px;
+    background: var(--bar); color: var(--ink);
+    font: inherit; cursor: pointer; text-decoration: none;
+    display: inline-flex; align-items: center; justify-content: center;
+  }
+  button:hover:not(:disabled), .btn:hover { border-color: var(--accent); }
+  #go { background: var(--accent); border-color: var(--accent); color: #fff; font-weight: 600; }
+  @media (prefers-color-scheme: dark) { #go { color: #0d1418; } }
+  button:disabled { opacity: .4; cursor: default; }
+  button:focus-visible, .btn:focus-visible, input:focus-visible {
+    outline: 2px solid var(--accent); outline-offset: 2px;
+  }
+  #address {
+    flex: 1; min-width: 0; height: 36px; padding: 0 14px;
+    border: 1px solid var(--line); border-radius: 18px;
+    background: var(--bar); color: var(--ink); font: inherit;
+  }
+  .bookmarks {
+    display: flex; gap: 6px; padding: 6px 10px; overflow-x: auto;
+    background: var(--chrome); border-bottom: 1px solid var(--line);
+  }
+  .bookmarks button { height: 30px; font-size: 13px; white-space: nowrap; }
+  .stage { position: relative; flex: 1; min-height: 0; }
+  iframe { width: 100%; height: 100%; border: 0; background: #fff; display: block; }
+  .note {
+    padding: 6px 12px; font-size: 13px; color: var(--muted);
+    background: var(--chrome); border-top: 1px solid var(--line);
+  }
+  .note a { color: var(--accent); }
+</style>
+</head>
+<body>
+
+<form class="chrome" id="bar" autocomplete="off">
+  <button type="button" id="back" title="Back" aria-label="Back" disabled>&larr;</button>
+  <button type="button" id="forward" title="Forward" aria-label="Forward" disabled>&rarr;</button>
+  <button type="button" id="reload" title="Reload" aria-label="Reload">&#8635;</button>
+  <button type="button" id="home" title="Home" aria-label="Home">Home</button>
+  <input id="address" type="text" placeholder="Type a web address or search" aria-label="Address">
+  <button type="submit" id="go" title="Go to this address">Go</button>
+  <a class="btn" id="external" href="#" target="_blank" rel="noopener" title="Open this page in a new tab">Open in tab</a>
+</form>
+
+<nav class="bookmarks" id="bookmarks" aria-label="Bookmarks"></nav>
+
+<div class="stage">
+  <iframe id="view" title="Embedded browser"
+    sandbox="allow-scripts allow-same-origin allow-forms allow-popups allow-popups-to-escape-sandbox"
+    referrerpolicy="no-referrer"></iframe>
+</div>
+
+<div class="note">
+  Blank page or error? That site doesn't allow embedding. Use <a href="#" id="note-link" target="_blank" rel="noopener">Open in tab</a> instead.
+</div>
+
+<script>
+  // ---- Edit these ----
+  const HOME = "https://example.com";
+  const SEARCH = "https://duckduckgo.com/?q=";
+  const BOOKMARKS = [
+    { name: "Example", url: "https://example.com" },
+    { name: "OpenStreetMap", url: "https://www.openstreetmap.org/export/embed.html" },
+    { name: "Wikipedia", url: "https://en.wikipedia.org" },
+  ];
+  // --------------------
+
+  const $ = (id) => document.getElementById(id);
+  const view = $("view"), address = $("address");
+  let history = [], index = -1;
+
+  function toUrl(text) {
+    text = text.trim();
+    if (!text) return HOME;
+    if (/^https?:\/\//i.test(text)) return text;
+    if (/^[^\s]+\.[a-z]{2,}(\/.*)?$/i.test(text)) return "https://" + text;
+    return SEARCH + encodeURIComponent(text);
+  }
+
+  function show(url) {
+    view.src = url;
+    address.value = url;
+    $("external").href = url;
+    $("note-link").href = url;
+    $("back").disabled = index <= 0;
+    $("forward").disabled = index >= history.length - 1;
+  }
+
+  function go(text) {
+    const url = toUrl(text);
+    history = history.slice(0, index + 1);
+    history.push(url);
+    index = history.length - 1;
+    show(url);
+  }
+
+  $("bar").addEventListener("submit", (e) => { e.preventDefault(); go(address.value); });
+  $("back").addEventListener("click", () => { if (index > 0) show(history[--index]); });
+  $("forward").addEventListener("click", () => { if (index < history.length - 1) show(history[++index]); });
+  $("reload").addEventListener("click", () => { view.src = history[index] || HOME; });
+  $("home").addEventListener("click", () => go(HOME));
+
+  BOOKMARKS.forEach((b) => {
+    const btn = document.createElement("button");
+    btn.type = "button";
+    btn.textContent = b.name;
+    btn.addEventListener("click", () => go(b.url));
+    $("bookmarks").appendChild(btn);
+  });
+
+  go(HOME);
+</script>
+</body>
+</html>
